@@ -36,6 +36,30 @@ defmodule WorkQueueTest do
     assert time < 120_000
   end
 
+  test "exiting is clean" do
+    {:ok, memory} = Agent.start_link(fn -> [] end)
+
+    work = fn ->
+      WorkQueue.process(
+        fn x, _ ->
+          Process.sleep(x)
+          Agent.update(memory, fn m -> [m|x] end)
+
+          {:ok, 0}
+        end,
+        [10, 10, 100, 100, 100],
+        worker_count: 2
+      )
+    end
+
+    {:ok, runner} = Task.start(work)
+    Process.sleep(50)
+    Process.exit(runner, :normal)
+
+    reports = Agent.get(memory, &(&1))
+    assert length(reports) == 2
+  end
+
   test "notifications of results" do
     WorkQueue.process(
       &double/2,        # worker
@@ -62,6 +86,7 @@ defmodule WorkQueueTest do
     assert { :started, nil } = first
     assert { :progress, _n } = hd(ticks)
   end
+
 
   
   defp double(value, _) do 

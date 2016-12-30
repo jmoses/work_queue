@@ -10,6 +10,8 @@ defmodule WorkQueue do
   @doc File.read!("README.md")
 
   def process(worker_fn, item_source, extra_opts \\ []) do
+    Process.flag(:trap_exit, true)
+
     pipe_while_ok do
       package_parameters(worker_fn, item_source, extra_opts)
       |> Options.analyze
@@ -88,6 +90,11 @@ defmodule WorkQueue do
         else
           loop(params, running, max)
         end
+      {:EXIT, from, reason} ->
+        Dict.put(params, :item_source, [])
+        Enum.map(running, fn t -> Task.Supervisor.terminate_child(params.supervisor_pid, t) end)
+        
+        Process.exit(self, "Exited")
     end
   end
 
